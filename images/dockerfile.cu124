@@ -11,12 +11,6 @@ WORKDIR /custom_nodes
 
 RUN git clone https://github.com/Comfy-Org/ComfyUI-Manager.git
 
-RUN git clone https://github.com/mit-han-lab/ComfyUI-nunchaku nunchaku_nodes
-
-RUN git clone https://github.com/TFL-TFL/ComfyUI_Text_Translation.git
-
-RUN git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git
-
 RUN git clone https://github.com/coderwangke/ComfyUI-Exporter.git
 
 FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
