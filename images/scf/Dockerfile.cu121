@@ -1,0 +1,89 @@
+FROM alpine/git:2.36.2 AS repos
+
+RUN git clone https://github.com/comfyanonymous/ComfyUI.git /code && \
+    cd /code && \
+    git checkout "483b3e62e00624fc52da8ad67e88f863abe975d2"
+
+FROM alpine/git:2.36.2 AS custom_nodes
+
+WORKDIR /custom_nodes
+
+RUN git clone https://github.com/Comfy-Org/ComfyUI-Manager.git
+
+RUN git clone https://github.com/TFL-TFL/ComfyUI_Text_Translation.git
+
+RUN git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git
+
+FROM pytorch/pytorch:2.2.1-cuda12.1-cudnn8-devel
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+ENV LANG=zh_CN.UTF-8
+
+ENV COMFYUI="/comfyui"
+ENV CFS_DIR="/data/comfyui"
+
+USER root
+
+RUN apt-get update && \
+    apt-get install -y \
+    rsync \
+    mesa-utils \
+    libegl1-mesa-dev \
+    libglib2.0-0 \
+    make \
+    ninja-build \
+    git \
+    aria2 \
+    fish \
+    fd-find \
+    vim \
+    libopencv-dev \
+    ffmpeg \
+    x264 \
+    x265 \
+    fonts-noto \
+    fonts-noto-cjk \
+    locales \
+    language-pack-zh-hans \
+    fonts-noto-color-emoji \
+    nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --upgrade pip && \
+    python3 -m venv /venv && \
+    . /venv/bin/activate
+
+# 使用 venv 环境
+ENV VIRTUAL_ENV="/venv"
+ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
+
+RUN echo "export VIRTUAL_ENV=${VIRTUAL_ENV}" >> /etc/profile && \
+    echo "export PATH=${PATH}" >> /etc/profile
+
+# 获取 ComfyUI 代码
+RUN --mount=type=bind,from=repos,source=/code,target=/code \
+    mkdir -p ${COMFYUI} && \
+    rsync -av /code/ ${COMFYUI}
+
+WORKDIR ${COMFYUI}
+
+# 确保依赖最新
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip install -r ${COMFYUI}/requirements.txt --no-cache-dir && \ 
+    find ${COMFYUI} -type f -name requirements.txt | xargs -I {} pip install -r {}
+
+# 内置自定义节点
+RUN --mount=type=bind,from=custom_nodes,source=/custom_nodes,target=/custom_nodes \
+    rsync -av /custom_nodes/ ${COMFYUI}/custom_nodes
+
+# custom_nodes 更新依赖至最新
+RUN --mount=type=cache,target=/root/.cache/pip \
+    find ${COMFYUI}/custom_nodes -type f -name requirements.txt | xargs -I {} pip install -r {}
+
+COPY extra_model_paths.yaml ${COMFYUI}/extra_model_paths.yaml
+
+COPY start.sh /start.sh
+
+ENTRYPOINT ["/start.sh"]
